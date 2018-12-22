@@ -129,6 +129,7 @@ private byte resizeHash(hash* table)
 {
     uint32_t tmpMax = table->max;
     node* oldNode = NULL;
+    node* tmpNode = NULL;
     if (table->total < (tmpMax >> 1) - HASH_IDLE_NODE) {
         // 空闲节点过多
         tmpMax >>= 1;
@@ -136,7 +137,7 @@ private byte resizeHash(hash* table)
         table->n += tmpMax - table->max;
     } else if (table->total >= table->max) {
         tmpMax *= 2;
-        node* tmpNode = (node*) malloc(sizeof(node) * (tmpMax << 1));
+        tmpNode = (node*) malloc(sizeof(node) * (tmpMax << 1));
         if (!tmpNode) {
             debug(DEBUG_ERROR, "Can't resize hash table");
             return S_ERR;
@@ -184,7 +185,13 @@ private byte resizeHash(hash* table)
             oldNode++;
         }
 
-        free(table->n + table->max);
+        tmpNode = (node*)realloc(table->n - table->max, tmpMax);
+        if (!tmpNode) {
+            table->n += table->max;
+            table->max = tmpMax;
+        } else {
+            table->n = tmpNode + table->max;
+        }
     } else {
         // 新增
         while (i++ < table->total) {

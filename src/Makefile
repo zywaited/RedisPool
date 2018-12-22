@@ -1,0 +1,28 @@
+CC ?= gcc
+
+INCLUDE = -I . -I ../vendor/
+
+LIB = -L ../vendor/iniparser/
+LIBNAME = -levent -lpthread -lm -liniparser
+
+BIN = ../bin/server
+
+OBJECT = debug/debug.o event/libevent.o 						\
+		 map/map.o map/hash.o map/tree.o 						\
+		 net/client.o net/server.o net/pool.o 					\
+		 proto/multibulk.o 										\
+		 sync/interface.o sync/process.o sync/thread.o  		\
+		 main.o types.o
+
+all: $(OBJECT)
+
+$(OBJECT): %.o: %.c
+	$(CC) $(INCLUDE) -c $< -o $@
+
+.PHONY: install
+install:
+	$(CC) $(INCLUDE) $(OBJECT) -o $(BIN) $(LIB) $(LIBNAME)
+
+.PHONY: clean
+clean:
+	rm -fr $(OBJECT) $(BIN)

@@ -396,6 +396,7 @@ public void readC(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
+	debug(DEBUG_INFO, "start to process client cmds[%d]", fd);
 	if (processClient(c) == S_ERR) {
 		if (c->isBlock) {
 			delRedis(rps, r, false);
@@ -408,6 +409,7 @@ public void readC(evutil_socket_t fd, short flag, void* args)
 	}
 
 	// 写入redis
+	debug(DEBUG_INFO, "start to copy cmds to redis[%d]", fd);
 	if (mvArrayBuff(r->c->middle, c->cmds, true) == S_ERR) {
 		if (c->isBlock) {
 			delRedis(rps, r, false);
@@ -462,6 +464,7 @@ public void writeR(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
+	debug(DEBUG_INFO, "start to write cmds to redis[%d]", fd);
 	if (baseWrite(r->c) == S_ERR) {
 		mapKey rk = {(uint64_t)fd, NULL};
 		removeRC(r, &rk, NULL, NULL);
@@ -490,7 +493,15 @@ public void writeC(evutil_socket_t fd, short flag, void* args)
 {
 	client* c = (client*)args;
 	bufferArray* cmds = c->middle;
+	mapKey ck = {(uint64_t)fd, NULL};
 	if (cmds->wpos <= cmds->rpos) {
+		// 判断是否要退出
+		if (c->isQuit) {
+			removeByC(c, &ck);
+			treeRemoveAndFree(service->clients, (int)fd);
+			return;
+		}
+
 		// 判断是否需要截取
 		if (cmds->wpos > 0) {
 			srangeArrayBuff(cmds, cmds->wpos);
@@ -504,7 +515,6 @@ public void writeC(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
-	mapKey ck = {(uint64_t)fd, NULL};
 	if (baseWrite(c) == S_ERR || !c->isValid || (cmds->wpos <= cmds->rpos && c->isQuit)) {
 		removeByC(c, &ck);
 		treeRemoveAndFree(service->clients, (int)fd);
@@ -582,6 +592,7 @@ public void acceptC(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
+	debug(DEBUG_INFO, "server accept a client[%d]", clientFd);
 	char* ip = NULL; // inet_ntoa(addr.sin_addr);
 	// 判断是否该进程已到负载
 	if (rps->activeNum >= rps->maxNum || service->clients->total >= service->maxClientSize) {

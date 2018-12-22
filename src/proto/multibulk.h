@@ -30,8 +30,9 @@ public byte processRedis(redis*);
  * 解析数字合法性
  * @param client* c
  * @param int64_t* num
+ * @param size_t* num
  * @param byte
  */
-private byte parseInputBuffNum(client*, int64_t*);
+private byte parseInputBuffNum(client*, int64_t*, size_t*);
 
 #endif

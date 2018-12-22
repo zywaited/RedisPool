@@ -181,16 +181,15 @@ public void srangeArrayBuff(bufferArray* arrayBuff, size_t current)
 	buffer* currentBuff = NULL;
 	if (tmpCurrentPos >= arrayBuff->wpos) {
 		// 全部删除
-		buffer** buff = arrayBuff->buff;
 		// 这里判断比最大值小是为了防止乱用
 		while (arrayBuff->wpos && arrayBuff->wpos <= arrayBuff->max) {
 			buffer* currentBuff = *(arrayBuff->buff + arrayBuff->wpos - 1);
-			if (currentBuff->used > 0) {
-				srangeBuff(currentBuff, currentBuff->max);
+			if (currentBuff && currentBuff->used > 0) {
+				freeBuff(currentBuff);
 			}
 			
 			arrayBuff->wpos--;
-			currentBuff = NULL;
+			arrayBuff->buff[arrayBuff->wpos] = NULL;
 		}
 
 		arrayBuff->wpos = 0;
@@ -340,8 +339,9 @@ public byte addBuffer(bufferArray* arrayBuff, size_t alen, const char* add, size
 
 	// 只考虑顺序增长
 	if (arrayBuff->wpos <= alen) {
-		arrayBuff->wpos++;
 		alen = arrayBuff->wpos;
+		arrayBuff->wpos++;
+		arrayBuff->used++;
 	}
 
 	buffer** buff = arrayBuff->buff + alen;
@@ -351,21 +351,20 @@ public byte addBuffer(bufferArray* arrayBuff, size_t alen, const char* add, size
 			return S_ERR;
 		}
 
-		buff = &tmp;
+		*buff = tmp;
 	}
 
 	if (addBuff(*buff, add, len) == S_ERR) {
 		return S_ERR;
 	}
 
-	arrayBuff->used++;
 	return S_OK;
 }
 
 public byte addBuff(buffer* buff, const char* add, size_t len)
 {
-	size_t extra = len - (buff->max - buff->wpos);
-	if (extra >= 0) {
+	int32_t extra = len - (buff->max - buff->wpos);
+	if (extra > 0) {
 		// 此处不做数据量处理
 		size_t addSize = PER_IOBUF_SIZE + 1;
 		size_t multi = extra / addSize;
@@ -384,6 +383,7 @@ public byte addBuff(buffer* buff, const char* add, size_t len)
 
 	memcpy(buff->buf + buff->wpos, add, len);
 	buff->wpos += len;
+	buff->used += len;
 	return S_OK;
 }
 
@@ -432,9 +432,10 @@ public byte mvArrayBuff(bufferArray* dest, bufferArray* source, boolean srange)
 	size_t index = 0;
 	for (; index < copyNum; index++) {
 		// 交互数据即可
-		buffer** tmp = source->buff + index;
+		buffer* tmp = source->buff[index];
 		source->buff[index] = dest->buff[dest->wpos];
-		dest->buff[dest->wpos++] = *tmp;
+		dest->buff[dest->wpos++] = tmp;
+		dest->used++;
 	}
 
 	if (srange) {
@@ -446,7 +447,7 @@ public byte mvArrayBuff(bufferArray* dest, bufferArray* source, boolean srange)
 
 public void clearArrayBuff(bufferArray* arrayBuff)
 {
-	memset(arrayBuff->buff, 0, arrayBuff->wpos);
+	memset(arrayBuff->buff, 0, arrayBuff->max);
 	arrayBuff->wpos = arrayBuff->rpos = 0;
 	arrayBuff->used -= arrayBuff->wpos;
 }

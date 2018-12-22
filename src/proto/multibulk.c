@@ -28,7 +28,8 @@ public byte processClient(client* c)
 				return S_ERR;
 			}
 
-			status = parseInputBuffNum(c, &multiBulkLen);
+			size_t len = 0;
+			status = parseInputBuffNum(c, &multiBulkLen, &len);
 			if (status == S_ERR) {
 				return S_ERR;
 			}
@@ -38,6 +39,7 @@ public byte processClient(client* c)
 			}
 
 			c->multiBulkLen = multiBulkLen;
+			addReplyLen(c, c->cmd->buf + c->cmd->rpos - len - 3, len + 1);
 		}
 
 		status = processCmds(c, true);
@@ -69,12 +71,14 @@ private byte processCmds(client* c, boolean isClient)
 				return S_ERR;
 			}
 
-			byte status = parseInputBuffNum(c, &buffLen);
+			size_t len = 0;
+			byte status = parseInputBuffNum(c, &buffLen, &len);
 			if (status != S_OK) {
 				return status;
 			}
 
 			c->bulkLen = buffLen;
+			addReplyLen(c, c->cmd->buf + c->cmd->rpos - len - 3, len + 1);
 		}
 
 		// 判断数据量是否足够
@@ -189,7 +193,7 @@ public byte processRedis(redis* rs)
 	return S_OK;
 }
 
-private byte parseInputBuffNum(client* c, int64_t* num)
+private byte parseInputBuffNum(client* c, int64_t* num, size_t* len)
 {
 	char* newLine = strchr(nextReadBuff(c), '\r');
 	if (newLine == NULL) {
@@ -209,8 +213,13 @@ private byte parseInputBuffNum(client* c, int64_t* num)
 		return S_ERR;
 	}
 
+	size_t slen = newLine - (nextReadBuff(c) + 1);
+	if (len) {
+		*len = slen;
+	}
+
 	// 获取传输长度
-	if (!parseInt(nextReadBuff(c) + 1, newLine - (nextReadBuff(c) + 1), num)) {
+	if (!parseInt(nextReadBuff(c) + 1, slen, num)) {
 		debug(DEBUG_ERROR, "[%s]the protocol error, after * or $ must be numeric", c->ip);
 		addReplyCmd(c, "-the protocol error, after * or $ must be numeric");
 		return S_ERR;

@@ -82,10 +82,11 @@ public void freeClient(client* c)
 		freeArrayBuff(c->cmds);
 		freeClientE(c->read);
 		freeClientE(c->write);
-		free(c);
 		if (c->fd > 0) {
 			close(c->fd);
 		}
+
+		free(c);
 	}
 }
 
@@ -140,16 +141,23 @@ public byte baseWrite(client* c)
 	int totalLen = 0;
 	// 用于判断缓冲区是否空闲
 	boolean isEnough = true;
+	uint32_t sendLen = 0;
 	do {
 		if (cmds->used == 0 || cmds->rpos >= cmds->wpos || cmds->rpos >= cmds->used) {
-			debug(DEBUG_WARNING, "Write cmds is empty[%d]", c->fd);
+			if (sendLen == 0) {
+				debug(DEBUG_WARNING, "Write cmds is empty[%d]", c->fd);
+			}
+
 			return S_OK;
 		}
 
 		buffer* cmd = *(cmds->buff + cmds->rpos);
-		int writeLen = cmd->rpos - cmd->wpos;
+		int32_t writeLen = cmd->wpos - cmd->rpos;
 		if (cmd->used == 0 || writeLen <= 0 || cmd->rpos >= cmd->used) {
-			debug(DEBUG_WARNING, "Write cmds is empty[%d]", c->fd);
+			if (sendLen == 0) {
+				debug(DEBUG_WARNING, "Write cmds is empty[%d]", c->fd);
+			}
+
 			return S_OK;
 		}
 
@@ -158,6 +166,7 @@ public byte baseWrite(client* c)
 		}
 
 		int wLen = send(c->fd, cmd->buf + cmd->rpos, writeLen, 0);
+		sendLen++;
 		if (wLen < 0) {
 			if (errno == EAGAIN) {
 				return S_OK;
@@ -181,8 +190,7 @@ public byte baseWrite(client* c)
 
 		// 判断写入大小
 		boolean over = true;
-		size_t extra = wLen - PER_IOBUF_SIZE;
-		if (extra > 0) {
+		if (wLen - PER_IOBUF_SIZE > 0) {
 			over = false;
 		}
 
