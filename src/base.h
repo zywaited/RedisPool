@@ -8,8 +8,6 @@
 #include "malloc.h"
 #include <stdio.h>
 
-#pragma pack(2)
-
 #define freeNameLen 30
 #define IP_LEN 20
 #define UNIX_PATH_LEN 100

@@ -1,4 +1,4 @@
-# 项目
+R# 项目
 - 1 redis协议
 - 2 网络IO
 - 3 数据结构、多进程、多线程
@@ -7,13 +7,14 @@
 - 1 libevent
 - 2 iniparser
 - 3 m (math)
+- 4 pthread
 
 # 结构
 <pre>
 ├── benchmark
-├── bin       						# 执行文件目录
+├── bin								# 执行文件目录
 ├── conf
-│   └── rp.ini 						# 配置文件
+│   └── rp.ini						# 配置文件
 ├── examples
 ├── src                             # 源代码
 │   ├── base.h
@@ -64,8 +65,25 @@
 - 2.1 阻塞读取socket连接
 - 2.2 IO复用（同步各子进程redis连接数，客户端数据传输，redis数据传输）
 
+# 实例
+```php
+<?php
+$r = new Redis();
+$r->connect('/tmp/socket/rs.sock');
+//var_dump($r->auth('123456'));
+var_dump($r->select(0));
+var_dump($r->get('waited'));
+var_dump($r->get('waited_test'));
+
+/** 返回结果(redis 设置了waited值为1)
+	bool(true)
+	string(1) "1"
+	bool(false)
+*/
+```
+
 # 注
-  该项目编译通过并且能正常启动，但数据处理逻辑有BUG，待调整
+  该项目编译通过并且能正常使用，可能数据处理逻辑存在BUG
 
 # 待完成
 - 1 信号处理

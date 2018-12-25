@@ -77,36 +77,48 @@ private byte processCmds(client* c, boolean isClient)
 				return status;
 			}
 
-			c->bulkLen = buffLen;
+			if (buffLen <= 0 && isClient) {
+				debug(DEBUG_ERROR, "[%s]the protocol error, invalid bulk len", c->ip);
+				addReplyCmd(c, "-the protocol error, invalid bulk len");
+				return S_ERR;
+			}
+
+			if (buffLen > 0) {
+				c->bulkLen = buffLen;
+			}
+
 			addReplyLen(c, c->cmd->buf + c->cmd->rpos - len - 3, len + 1);
 		}
 
 		// 判断数据量是否足够
-		if (c->cmd->wpos - c->cmd->rpos < (size_t)(c->bulkLen + 2)) {
-			return S_NT;
-		}
-
-		c->cmd->rpos += c->bulkLen;
-		if (c->cmd->buf[c->cmd->rpos] != '\r' || c->cmd->buf[c->cmd->rpos + 1] != '\n') {
-			debug(DEBUG_ERROR, "[%s]the protocol error, must be end with \\r\\n", c->ip);
-			addReplyCmd(c, "-the protocol error, must be end with \\r\\n");
-			return S_ERR;
-		}
-
-		if (c->argc == 0 && isClient) {
-			// 代表命令
-			char tmpCmd[60] = {};
-			strncpy(tmpCmd, c->cmd->buf + c->cmd->rpos - c->bulkLen, c->bulkLen);
-			mapKey s = {0, tmpCmd};
-			if (c->isBlock && rps->releaseCmds && isExistKey(rps->releaseCmds, &s)) {
-				c->isBlock = false;
-			} else if (!c->isBlock && rps->blockCmds && isExistKey(rps->blockCmds, &s)) {
-				c->isBlock = true;
+		if (c->bulkLen > 0) {
+			if (c->cmd->wpos - c->cmd->rpos < (size_t)(c->bulkLen + 2)) {
+				return S_NT;
 			}
+
+			c->cmd->rpos += c->bulkLen;
+			if (c->cmd->buf[c->cmd->rpos] != '\r' || c->cmd->buf[c->cmd->rpos + 1] != '\n') {
+				debug(DEBUG_ERROR, "[%s]the protocol error, must be end with \\r\\n", c->ip);
+				addReplyCmd(c, "-the protocol error, must be end with \\r\\n");
+				return S_ERR;
+			}
+
+			if (c->argc == 0 && isClient) {
+				// 代表命令
+				char tmpCmd[60] = {};
+				strncpy(tmpCmd, c->cmd->buf + c->cmd->rpos - c->bulkLen, c->bulkLen);
+				mapKey s = {0, tmpCmd};
+				if (c->isBlock && rps->releaseCmds && isExistKey(rps->releaseCmds, &s)) {
+					c->isBlock = false;
+				} else if (!c->isBlock && rps->blockCmds && isExistKey(rps->blockCmds, &s)) {
+					c->isBlock = true;
+				}
+			}
+
+			addReplyLen(c, c->cmd->buf + c->cmd->rpos - c->bulkLen, c->bulkLen);
+			c->cmd->rpos += 2;
 		}
 
-		addReplyLen(c, c->cmd->buf + c->cmd->rpos - c->bulkLen, c->bulkLen);
-		c->cmd->rpos += 2;
 		c->bulkLen = 0;
 		c->multiBulkLen--;
 		c->argc++;
@@ -137,6 +149,7 @@ public byte processRedis(redis* rs)
 				return S_OK;
 			}
 
+			boolean addReplyType = true;
 			switch (*(nextReadBuff(c))) {
 				case '+':
 				case '-':
@@ -163,14 +176,20 @@ public byte processRedis(redis* rs)
 
 					c->multiBulkLen = multiBulkLen;
 					break;
+				case '$':
+					c->multiBulkLen = 1;
+					addReplyType = false;
+					break;
 				default:
 					debug(DEBUG_ERROR, "[%s]the protocol error, unexpected %c", c->ip, *(nextReadBuff(c)));
 					addReplyCmd(c, "-the protocol error, unexpected line");
 					break;
 			}
 
-			addReplyBySize(c, nextReadBuff(c), newLine - nextReadBuff(c));
-			c->cmd->rpos = newLine - c->cmd->buf + 2;
+			if (addReplyType) {
+				addReplyBySize(c, nextReadBuff(c), newLine - nextReadBuff(c));
+				c->cmd->rpos = newLine - c->cmd->buf + 2;
+			}
 		}
 
 		if (c->multiBulkLen > 0) {
@@ -222,13 +241,6 @@ private byte parseInputBuffNum(client* c, int64_t* num, size_t* len)
 	if (!parseInt(nextReadBuff(c) + 1, slen, num)) {
 		debug(DEBUG_ERROR, "[%s]the protocol error, after * or $ must be numeric", c->ip);
 		addReplyCmd(c, "-the protocol error, after * or $ must be numeric");
-		return S_ERR;
-	}
-
-	// 规范长度
-	if (num <= 0) {
-		debug(DEBUG_ERROR, "[%s]the protocol error, invalid bulk len", c->ip);
-		addReplyCmd(c, "-the protocol error, invalid bulk len");
 		return S_ERR;
 	}
 

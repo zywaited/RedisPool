@@ -5,6 +5,10 @@
 
 private boolean isHashKeyEqual(mapKey* tmpKey, mapKey* key)
 {
+    if (!tmpKey || !key) {
+        return false;
+    }
+
     if (tmpKey->h != key->h) {
         return false;
     }
@@ -130,7 +134,7 @@ private byte resizeHash(hash* table)
     uint32_t tmpMax = table->max;
     node* oldNode = NULL;
     node* tmpNode = NULL;
-    if (table->total < (tmpMax >> 1) - HASH_IDLE_NODE) {
+    if (table->total > HASH_DEFAULT_MAX_NODE && table->total < (tmpMax >> 1) - HASH_IDLE_NODE) {
         // 空闲节点过多
         tmpMax >>= 1;
         oldNode = table->n;

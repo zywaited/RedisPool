@@ -172,9 +172,14 @@ public void run(int argc, char** argv)
 	int index = 0;
 	debug(DEBUG_INFO, "start to create child worker");
 	for (; index < children; ++index) {
-		chan* tmp = service->socks->ch + index;
+		chan* tmp = NULL;
+		if (service->socks) {
+			tmp = service->socks->ch + index;
+		}
+
 		_sync* sc = newSync(PROCESS, NOT_DETACH, NULL, NULL, worker, (void*)tmp, "worker");
 		start(sc);
+		treePut(globals->children, (int)(sc->id), &p);
 		if (!service->socks) {
 			continue;
 		}
@@ -185,7 +190,6 @@ public void run(int argc, char** argv)
 		}
 
 		treePut(service->socks->pToC, (int)(sc->id), v);
-		treePut(globals->children, (int)(sc->id), &p);
 		deleteSync(sc);
 	}
 
@@ -330,6 +334,7 @@ public void readR(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
+	srangeBuff(r->c->cmd, r->c->cmd->rpos);
 	r->c->cmdNum = 0;
 	// 判断是否写入完成
 	if (r->c->isBlock) {
@@ -1128,18 +1133,22 @@ public void* task(cid_t pid, char* name, void* arg)
 
 public void* restartWorker(pid_t pid, byte type, int code)
 {
-	mapValue* v = treeRemove(service->socks->pToC, (int)pid);
-	if (!v) {
-		debug(DEBUG_WARNING, "Can't find sock");
-		return NULL;
+	mapValue* p = treeRemove(globals->children, (int)pid);
+	void* tmpCh = NULL;
+	if (service->socks) {
+		mapValue* v = treeRemove(service->socks->pToC, (int)pid);
+		if (v) {
+			tmpCh = v->value;
+		} else {
+			debug(DEBUG_WARNING, "Can't find sock");
+		}
 	}
 
-	mapValue* p = treeRemove(globals->children, (int)pid);
 	if (type == CHILD_EXIT_NORMAL && code != 0) {
 		return NULL;
 	}
 
-	_sync* sc = newSync(PROCESS, NOT_DETACH, NULL, NULL, worker, v->value, "worker");
+	_sync* sc = newSync(PROCESS, NOT_DETACH, NULL, NULL, worker, tmpCh, "worker");
 	start(sc);
 	if (!p) {
 		int exist = 1;
