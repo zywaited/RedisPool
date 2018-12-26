@@ -1,5 +1,6 @@
 #include "server.h"
 #include <string.h>
+#include <arpa/inet.h>
 
 #define setTcp(ip, port)										\
 	do {														\
@@ -590,15 +591,26 @@ public void checkC(evutil_socket_t fd, short flag, void* args)
 
 public void acceptC(evutil_socket_t fd, short flag, void* args)
 {
-	struct sockaddr_in addr;
+	struct sockaddr addr;
 	socklen_t sockaddrLen = sizeof(struct sockaddr);
-	int clientFd = accept(fd, (struct sockaddr*)&addr, &sockaddrLen);
+	int clientFd = accept(fd, &addr, &sockaddrLen);
 	if (clientFd <= 0) {
 		return;
 	}
 
-	debug(DEBUG_INFO, "server accept a client[%d]", clientFd);
-	char* ip = NULL; // inet_ntoa(addr.sin_addr);
+	char* ip = NULL;
+	if (addr.sa_family == AF_INET) {
+		struct sockaddr_in clientIp;
+		if (getpeername(clientFd, (struct sockaddr*)&clientIp, &sockaddrLen) == 0) {
+			ip = inet_ntoa(clientIp.sin_addr);
+		} else {
+			debug(DEBUG_WARNING, "can't get client's ip[%d]", clientFd);
+		}
+	} else {
+		ip = "127.0.0.1";
+	}
+
+	debug(DEBUG_INFO, "server accept a client[%d][%s]", clientFd, ip);
 	// 判断是否该进程已到负载
 	if (rps->activeNum >= rps->maxNum || service->clients->total >= service->maxClientSize) {
 		if (service->socks->used >= MAX_INFO_NUM) {
@@ -611,7 +623,12 @@ public void acceptC(evutil_socket_t fd, short flag, void* args)
 		// 交由其他进程处理
 		clientInfo* info = service->socks->info + service->socks->used;
 		info->fd = fd;
-		strcpy(info->ip, ip);
+		if (ip) {
+			strcpy(info->ip, ip);
+		} else {
+			memset(info->ip, 0, IP_LEN);
+		}
+
 		service->socks->used++;
 		return;
 	}
@@ -1144,7 +1161,13 @@ public void* restartWorker(pid_t pid, byte type, int code)
 		}
 	}
 
+	// 非正常退出
 	if (type == CHILD_EXIT_NORMAL && code != 0) {
+		return NULL;
+	}
+
+	// 管道损坏
+	if (type = CHILD_EXIT_SIGNAL && code == 13) {
 		return NULL;
 	}
 
