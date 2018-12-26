@@ -1,7 +1,8 @@
-R# 项目
+# 项目
 - 1 redis协议
 - 2 网络IO
 - 3 数据结构、多进程、多线程
+- 4 PHP HashTable
 
 # 依赖库
 - 1 libevent
@@ -64,6 +65,20 @@ R# 项目
 - 2 子进程： 两个线程
 - 2.1 阻塞读取socket连接
 - 2.2 IO复用（同步各子进程redis连接数，客户端数据传输，redis数据传输）
+
+# 安装说明
+```sh
+# 编译iniparser
+cd RedisPool/vendor/iniparser
+make
+
+# 编译安装RedisPool
+cd RedisPool/src
+make && make install
+
+# 执行
+../bin/server
+```
 
 # 实例
 ```php
