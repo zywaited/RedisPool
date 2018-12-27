@@ -65,6 +65,27 @@ public void run(int argc, char** argv)
 
 	free(configPath);
 	debug(DEBUG_INFO, "start to read ini");
+	// 判断是否后台运行
+	int daemonize = iniparser_getint(ini, "global:daemonize", 0);
+	// 设置重定向
+	const char* dump = iniparser_getstring(ini, "global:dump", NULL);
+	const char* log = iniparser_getstring(ini, "global:log", NULL);
+	if (daemonize > 0) {
+		debug(DEBUG_INFO, "start to set deamonzie");
+		setDaemonize();
+	}
+	
+	if (dump && strlen(dump) > 0) {
+		debug(DEBUG_INFO, "start to dump stdout and stderr[%s]", dump);
+		setDup2(dump, 1);
+		setDup2(dump, 2);
+	}
+
+	if (log && strlen(log) > 0) {
+		debug(DEBUG_INFO, "start to set file log[%s]", log);
+		setDebugMode(DEBUG_FILE, log);
+	}
+
 	int timeout = iniparser_getint(ini, "global:timeout", 0);
 	if (timeout > 0) {
 		g->timeout.tv_sec = timeout;
@@ -559,6 +580,7 @@ public int getTcpFd(const char* ip, size_t port, size_t backlog)
 	}
 
 	setTimeOut(fd, &globals->timeout);
+	debug(DEBUG_INFO, "bind tcp socket[%d] in [%s:%d]", fd, ip, port);
 	return fd;
 }
 
@@ -581,6 +603,7 @@ public int getUnixFd(const char* path, size_t backlog)
 	}
 
 	setTimeOut(fd, &globals->timeout);
+	debug(DEBUG_INFO, "bind unix socket[%d] in [%s]", fd, path);
 	return fd;
 }
 

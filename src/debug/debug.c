@@ -108,18 +108,19 @@ public void debug(byte type, const char* format, ...)
 	offset = strlen(buf);
 	*(buf + offset) = '\n';
 	if (getDebugMode() == DEBUG_NORMAL || 
-		getDebugMode() == DEBUG_FILE && 
-		!debugFd) {
+		getDebugMode() == DEBUG_FILE && !debugFd
+	) {
 		printf("%s", buf);
 		return;
 	}
 
 	fwrite(buf, sizeof(char), offset + 1, debugFd);
+	fflush(debugFd);
 }
 
 public byte setDup2(const char* fileName, int oldFd)
 {
-	int fd = open(fileName, O_CREAT | O_RDWR | O_APPEND, S_IRWXU);
+	int fd = open(fileName, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR );
 	if (fd < 0) {
 		debug(DEBUG_WARNING, "Can't open the file[%s] to set dup2[%d]", fileName, oldFd);
 		return S_ERR;

@@ -38,4 +38,6 @@ public byte saveArgs(int, char**);
  */
 public void setProcessTitle(const char*);
 
+public byte setDaemonize();
+
 #endif

@@ -244,3 +244,23 @@ public void setProcessTitle(const char* title)
 		psBuffer[psBufferSize - 1] = '\0';
 	}
 }
+
+public byte setDaemonize()
+{
+	pid_t pid = fork();
+	switch (pid) {
+		case -1:
+			// debug
+			debug(DEBUG_ERROR, "Parent[%d] can't create child process", (int)getpid());
+			return S_ERR;
+		case 0:
+			// child
+			setsid();
+			break;
+		default:
+			// parent
+			exit(0);
+	}
+
+	return S_OK;
+}
