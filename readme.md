@@ -76,7 +76,7 @@ make
 cd RedisPool/src
 # prefix 默认 RedisPool/bin 
 # config-path 默认 RedisPool/conf
-/configure LDFLAGS=-L../vendor/iniparser # [--prefix=/path --with-config-path=/path]
+./configure LDFLAGS=-L../vendor/iniparser # [--prefix=/path --with-config-path=/path]
 make && make install
 
 # 执行
