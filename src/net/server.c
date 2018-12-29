@@ -52,10 +52,21 @@ public void run(int argc, char** argv)
 	g->timeout.tv_sec = 0;
 	g->timeout.tv_usec = 0;
 	globals = g;
+#ifndef SERVER_CONFIG_PATH
 	char* execPath = realpath(argv[0], NULL);
 	char* configPath = (char*)realloc(execPath, strlen(execPath) + 20);
 	char* appPath = dirname(dirname(configPath));
 	sprintf(configPath, "%s/%s/%s", appPath, "conf", CONFIG_NAME);
+#else
+	char* configPath = SERVER_CONFIG_PATH;
+	if (!configPath || strlen(configPath) < 1) {
+		debug(DEBUG_ERROR, "the config path is empty");
+		return;
+	}
+
+	configPath = (char*)malloc(strlen(configPath) + 20);
+	sprintf(configPath, "%s/%s", SERVER_CONFIG_PATH, CONFIG_NAME);
+#endif
 	// 读取配置项
 	dictionary* ini = iniparser_load(configPath);
 	if (!ini) {
@@ -70,15 +81,16 @@ public void run(int argc, char** argv)
 	// 设置重定向
 	const char* dump = iniparser_getstring(ini, "global:dump", NULL);
 	const char* log = iniparser_getstring(ini, "global:log", NULL);
-	if (daemonize > 0) {
-		debug(DEBUG_INFO, "start to set deamonzie");
-		setDaemonize();
-	}
-	
 	if (dump && strlen(dump) > 0) {
 		debug(DEBUG_INFO, "start to dump stdout and stderr[%s]", dump);
 		setDup2(dump, 1);
 		setDup2(dump, 2);
+	}
+
+	if (daemonize > 0) {
+		debug(DEBUG_INFO, "start to set deamonzie");
+		setDaemonize();
+		g->pid = getpid();
 	}
 
 	if (log && strlen(log) > 0) {

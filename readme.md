@@ -68,16 +68,19 @@
 
 # 安装说明
 ```sh
-# 编译iniparser
+# 下载iniparser，放入vendor中，编译
 cd RedisPool/vendor/iniparser
 make
 
 # 编译安装RedisPool
 cd RedisPool/src
+# prefix 默认 RedisPool/bin 
+# config-path 默认 RedisPool/conf
+/configure LDFLAGS=-L../vendor/iniparser # [--prefix=/path --with-config-path=/path]
 make && make install
 
 # 执行
-../bin/server
+RedisPool/bin/server
 ```
 
 # 实例

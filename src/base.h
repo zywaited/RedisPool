@@ -1,6 +1,9 @@
 #ifndef __BASE_H
 #define __BASE_H
 
+/** add by configure */
+#include "config.h"
+
 #include <time.h>
 #include <errno.h>
 #include <stdint.h>

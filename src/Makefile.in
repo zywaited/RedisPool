@@ -5,7 +5,8 @@ INCLUDE = -I . -I ../vendor/
 LIB = -L ../vendor/iniparser/
 LIBNAME = -levent -lpthread -lm -liniparser
 
-BIN = ../bin/server
+prefix=@prefix@
+BIN = ${prefix}/server
 
 OBJECT = debug/debug.o event/libevent.o 						\
 		 map/map.o map/hash.o map/tree.o 						\
