@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 #include "base.h"
+#include "map/tree.h"
+#include "map/hash.h"
+#include "types.h"
 #include "event/e.h"
 #include "iniparser/src/iniparser.h"
 
@@ -117,6 +120,11 @@ typedef struct server {
 	/* 阻塞读取链接，该配置失效 */
 	clientE* accept;
 	dictionary* ini;
+#ifdef HAVE_SYS_SIGNALFD_H
+	clientE* readSg;
+#endif
+	pthread_mutex_t mutex;
+	boolean isThreadAccept;
 } server;
 
 #endif

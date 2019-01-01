@@ -1,6 +1,7 @@
 #include "server.h"
 #include <string.h>
 #include <arpa/inet.h>
+#include "cmd.h"
 
 #define setTcp(ip, port)										\
 	do {														\
@@ -76,6 +77,10 @@ public void run(int argc, char** argv)
 
 	free(configPath);
 	debug(DEBUG_INFO, "start to read ini");
+	if (!iniCmd(ini, argc, argv)) {
+		return;
+	}
+
 	// 判断是否后台运行
 	int daemonize = iniparser_getint(ini, "global:daemonize", 0);
 	// 设置重定向
@@ -96,6 +101,18 @@ public void run(int argc, char** argv)
 	if (log && strlen(log) > 0) {
 		debug(DEBUG_INFO, "start to set file log[%s]", log);
 		setDebugMode(DEBUG_FILE, log);
+	}
+
+	const char* pidfile = iniparser_getstring(ini, "global:pidfile", NULL);
+	if (pidfile && strlen(pidfile) > 0) {
+		FILE* f = fopen(pidfile, "w+");
+		if (!f) {
+			debug(DEBUG_ERROR, "the pid file not exist");
+		} else {
+			fprintf(f, "%d", g->pid);
+			fflush(f);
+			fclose(f);
+		}
 	}
 
 	int timeout = iniparser_getint(ini, "global:timeout", 0);
@@ -139,7 +156,7 @@ public void run(int argc, char** argv)
 		return;
 	}
 
-	debug(DEBUG_INFO, "start to create serer socket");
+	debug(DEBUG_INFO, "start to create server socket");
 	if (isTcp > 0) {
 		g->isTcp = true;
 		const char* ip = iniparser_getstring(ini, "server:ip", NULL);
@@ -228,6 +245,7 @@ public void run(int argc, char** argv)
 	}
 
 	debug(DEBUG_INFO, "start to monitor worker");
+	installSignal(true);
 	while (true) {
 		// 暂不加信号处理, 循环读取
 		releaseChild(restartWorker);
@@ -235,6 +253,10 @@ public void run(int argc, char** argv)
 		// 判断子进程不存在退出
 		if (globals->children->total < 1) {
 			debug(DEBUG_INFO, "the children all exit, now to end");
+			if (pidfile && strlen(pidfile) > 0) {
+				remove(pidfile);
+			}
+
 			return;
 		}
 	}
@@ -270,6 +292,11 @@ public boolean initServer(int fd, size_t maxClientSize, size_t millisecond)
 #endif
 	s->base = NULL;
 	s->accept = NULL;
+#ifdef HAVE_SYS_SIGNALFD_H
+	s->readSg = NULL;
+#endif
+	pthread_mutex_init(&s->mutex, NULL);
+	s->isThreadAccept = false;
 	return true;
 }
 
@@ -323,6 +350,14 @@ public void freeServer(server* s)
 		s->ini = NULL;
 	}
 
+#ifdef HAVE_SYS_SIGNALFD_H
+	if (s->readSg) {
+		freeClientE(s->readSg);
+		s->readSg = NULL;
+	}
+#endif
+
+	pthread_mutex_destroy(&s->mutex);
 	free(s);
 }
 
@@ -406,7 +441,7 @@ public void readC(evutil_socket_t fd, short flag, void* args)
 			removeRC((redis*)r->value, &rk, NULL, &ck);
 		}
 		
-		treeRemoveAndFree(service->clients, (int)fd);
+		dealRemoveClient((int)fd);
 		removeRC(NULL, NULL, c, NULL);
 		return;
 	}
@@ -537,7 +572,7 @@ public void writeC(evutil_socket_t fd, short flag, void* args)
 		// 判断是否要退出
 		if (c->isQuit) {
 			removeByC(c, &ck);
-			treeRemoveAndFree(service->clients, (int)fd);
+			dealRemoveClient((int)fd);
 			return;
 		}
 
@@ -556,7 +591,7 @@ public void writeC(evutil_socket_t fd, short flag, void* args)
 
 	if (baseWrite(c) == S_ERR || !c->isValid || (cmds->wpos <= cmds->rpos && c->isQuit)) {
 		removeByC(c, &ck);
-		treeRemoveAndFree(service->clients, (int)fd);
+		dealRemoveClient((int)fd);
 		return;
 	}
 
@@ -678,7 +713,9 @@ public void acceptC(evutil_socket_t fd, short flag, void* args)
 		return;
 	}
 
+	service->isThreadAccept && pthread_mutex_lock(&service->mutex);
 	treePut(service->clients, clientFd, nodeValue);
+	service->isThreadAccept && pthread_mutex_unlock(&service->mutex);
 }
 
 public int connectTcpFd(char* ip, size_t port)
@@ -845,7 +882,9 @@ public void readS(evutil_socket_t fd, short flag, void* arg)
 			return;
 		}
 
+		service->isThreadAccept && pthread_mutex_lock(&service->mutex);
 		treePut(service->clients, clientFd, nodeValue);
+		service->isThreadAccept && pthread_mutex_unlock(&service->mutex);
 		return;
 	}
 
@@ -1163,6 +1202,8 @@ public void* worker(cid_t pid, char* name, void* arg)
 	}
 
 	debug(DEBUG_INFO, "worker start to create accept task");
+	service->isThreadAccept = true;
+	installSignal(false);
 	_sync* sc = newSync(THREAD, DETACH, NULL, NULL, task, NULL, "accept_task");
 	if (!sc) {
 		exit(-1);
@@ -1178,6 +1219,9 @@ public void* task(cid_t pid, char* name, void* arg)
 	debug(DEBUG_INFO, "server start to accept client");
 	while (true) {
 		acceptC((evutil_socket_t)service->fd, EV_READ | EV_PERSIST, NULL);
+		if (globals->isExit) {
+			return NULL;
+		}
 	}
 	
 	return NULL;
@@ -1193,6 +1237,7 @@ public void* restartWorker(pid_t pid, byte type, int code)
 			tmpCh = v->value;
 		} else {
 			debug(DEBUG_WARNING, "Can't find sock");
+			return NULL;
 		}
 	}
 
@@ -1206,6 +1251,10 @@ public void* restartWorker(pid_t pid, byte type, int code)
 		return NULL;
 	}
 
+	if (globals->isExit) {
+		return NULL;
+	}
+
 	_sync* sc = newSync(PROCESS, NOT_DETACH, NULL, NULL, worker, tmpCh, "worker");
 	start(sc);
 	if (!p) {
@@ -1214,6 +1263,27 @@ public void* restartWorker(pid_t pid, byte type, int code)
 		p = &tmp;
 	}
 
+	if (service->socks) {
+		treePut(service->socks->pToC, (int)(sc->id), tmpCh);
+	}
+
 	treePut(globals->children, (int)(sc->id), p);
+	deleteSync(sc);
 	return NULL;
+}
+
+public void dealRemoveClient(int fd)
+{
+	service->isThreadAccept && pthread_mutex_lock(&service->mutex);
+	treeRemoveAndFree(service->clients, fd);
+	service->isThreadAccept && pthread_mutex_unlock(&service->mutex);
+	if (service->clients->total > 0) {
+		return;
+	}
+
+	if (!globals->isExit) {
+		return;
+	}
+
+	exit(0);
 }

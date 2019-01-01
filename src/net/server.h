@@ -138,4 +138,6 @@ public void* task(cid_t, char*, void*);
 
 public void* restartWorker(pid_t, byte, int);
 
+public void dealRemoveClient(int);
+
 #endif

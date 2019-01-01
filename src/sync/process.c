@@ -130,7 +130,7 @@ public void releaseChild(childExitCallback func)
 				func(pid, exit_type, exit_code);
 			}
 
-			debug(DEBUG_NOTICE, "Child: %d stopped for tracing\n", (int)pid);
+			debug(DEBUG_NOTICE, "Child: %d stopped for tracing", (int)pid);
 			continue;
 		} else {
 			exit_type = CHILD_EXIT_UNKNOWN;
@@ -142,7 +142,7 @@ public void releaseChild(childExitCallback func)
 			func(pid, exit_type, exit_code);
 		}
 
-		debug(DEBUG_NOTICE, "Child: %d has exited %s\n", (int)pid, info);
+		debug(DEBUG_NOTICE, "Child: %d has exited %s", (int)pid, info);
 	}
 }
 

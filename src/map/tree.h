@@ -4,6 +4,7 @@
 #include "base.h"
 #include "map.h"
 #include "debug/debug.h"
+#include "rstack.h"
 
 // 注： void* value不是由malloc申请的内存
 // 这里也不会调用free
@@ -117,5 +118,34 @@ public treeNode* parentOf(treeNode*);
 private treeNode* successor(treeNode*);
 
 private treeNode* getTreeNode(tree*, int);
+
+#define FOREACH_TREE(tr, mk, mv)								\
+    do {														\
+    	if (!tr || !tr->root) {									\
+    		continue;											\
+    	}														\
+    															\
+    	rstack* rsk = newRStack(sizeof(treeNode*), tr->total);	\
+    	if (!rsk) {												\
+    		continue;											\
+    	}														\
+    															\
+    	treeNode* n = tr->root;									\
+    	while (n || !isEmptyRStack(rsk)) {						\
+    		if (n) {											\
+    			pushRStack(rsk, (void*)n);						\
+    			n = leftOf(n);									\
+    		} else {											\
+    			n = (treeNode*)popRStack(rsk);                  \
+    			mk = n->key;									\
+    			mv = n->value;
+
+#define END_FOREACH_TREE()							\
+    			n = rightOf(n);						\
+    		}										\
+        }											\
+        											\
+        freeRStack(rsk);							\
+    } while (0);
 
 #endif
