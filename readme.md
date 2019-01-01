@@ -88,8 +88,8 @@ cd RedisPool/src
 chmod +x ./configure && ./configure LDFLAGS=-L../vendor/iniparser # [--prefix=/path --with-config-path=/path]
 make && make install
 
-# 执行
-RedisPool/bin/server
+# 执行 
+RedisPool/bin/server # [start restart stop]
 ```
 
 # 实例
